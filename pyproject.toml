@@ -1,0 +1,15 @@
+[project]
+name = "data-driven-blog"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.121.1",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "pydantic>=2.12.4",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "uvicorn>=0.38.0",
+]
