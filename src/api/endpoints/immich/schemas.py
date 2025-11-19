@@ -131,6 +131,21 @@ class SearchAssetResponseDto(BaseModel):
     checksum: str
 
 
+# Response models
+class AlbumSearchResponse(BaseModel):
+    total: int
+    count: int
+    items: List[SearchAlbumResponseDto]
+    facets: List[dict] = []
+    nextPage: Optional[int] = None
+
+class AssetSearchResponse(BaseModel):
+    total: int
+    count: int
+    items: List[SearchAssetResponseDto]
+    facets: List[dict] = []
+    nextPage: Optional[int] = None
+
 class SearchMetadataResponse(BaseModel):
-    albums: SearchAlbumResponseDto
-    assets: SearchAssetResponseDto
+    albums: AlbumSearchResponse
+    assets: AssetSearchResponse

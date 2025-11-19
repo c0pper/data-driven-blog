@@ -1,3 +1,4 @@
+import pydantic
 from src.api.endpoints.immich.schemas import SearchAssetsRequest, SearchMetadataResponse, AssetOrder
 from typing import List, Optional
 from datetime import datetime
@@ -26,6 +27,55 @@ async def get_immich_headers():
         "Content-Type": "application/json",
         "x-api-key": config.api_key
     }
+
+
+async def search_assets_by_date_logic(target_date: str, with_exif: bool = True):
+    """
+    Core logic for searching assets by date without FastAPI dependencies.
+    """
+    try:
+        # Parse the target date and create date range
+        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+        taken_after = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        taken_before = target_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        search_request = SearchAssetsRequest(
+            takenAfter=taken_after,
+            takenBefore=taken_before,
+            withExif=with_exif,
+            order=AssetOrder.ASC
+        )
+        
+        # Convert to JSON-serializable dict
+        request_data = search_request.model_dump(exclude_none=True, mode='json')
+        
+        # Get headers directly instead of using Depends
+        headers = await get_immich_headers()
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{config.base_url}/api/search/metadata",
+                json=request_data,
+                headers=headers,
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Immich API error: {response.text}")
+            
+            # return response.json()
+            return_data = SearchMetadataResponse(**response.json())
+            return return_data
+            
+            
+    except ValueError as e:
+        # This catches date parsing errors
+        raise Exception(f"Invalid date format. Use YYYY-MM-DD: {str(e)}")
+    except pydantic.ValidationError as e:
+        # This catches Pydantic validation errors
+        raise Exception(f"Response validation error: {str(e)}")
+    except httpx.RequestError as e:
+        raise Exception(f"Unable to connect to Immich server: {str(e)}")
 
 
 @router.post("/search/assets", response_model=SearchMetadataResponse)
@@ -61,58 +111,13 @@ async def search_assets(
         )
 
 
-# Specialized endpoint for getting assets on a particular date
+# Keep the original endpoint for API use
 @router.post("/search/assets/date/{target_date}")
 async def search_assets_by_date(
-    target_date: str,  # Format: YYYY-MM-DD
+    target_date: str,
     with_exif: bool = True,
-    headers: dict = Depends(get_immich_headers)
 ):
-    """
-    Search for assets taken on a specific date.
-    """
-    try:
-        # Parse the target date and create date range
-        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
-        taken_after = target_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-        taken_before = target_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
-        
-        search_request = SearchAssetsRequest(
-            takenAfter=taken_after,
-            takenBefore=taken_before,
-            withExif=with_exif,
-            order=AssetOrder.ASC
-        )
-        
-        # Convert to JSON-serializable dict
-        request_data = search_request.model_dump(exclude_none=True, mode='json')
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{config.base_url}/api/search/metadata",
-                json=request_data,
-                headers=headers,
-                timeout=30.0
-            )
-            
-            if response.status_code != 200:
-                raise HTTPException(
-                    status_code=response.status_code,
-                    detail=f"Immich API error: {response.text}"
-                )
-            
-            return response.json()
-            
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid date format. Use YYYY-MM-DD"
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Unable to connect to Immich server: {str(e)}"
-        )
+    return await search_assets_by_date_logic(target_date, with_exif)
 
 
 # Utility function to get assets for analysis
